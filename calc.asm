@@ -37,6 +37,7 @@ Operand2      REAL8 ?
 LastOp        BYTE ?
 X             DWORD ?
 Y             DWORD ?
+hWnd          HWND ?
 
 .CODE
 start:
@@ -109,16 +110,23 @@ WinMain PROC
            WS_SYSMENU or WS_CLIPCHILDREN or WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
            300, 350, 0, 0, hInstance, 0
 
+    MOV hWnd, EAX
+
     INVOKE ShowWindow, EAX, SW_SHOWNORMAL
     INVOKE UpdateWindow, EAX
 
 msg_loop:
-    INVOKE GetMessage, ADDR msg, 0, 0, 0
-    TEST EAX, EAX
-    JZ end_loop
-    INVOKE TranslateMessage, ADDR msg
-    INVOKE DispatchMessage, ADDR msg
-    JMP msg_loop
+    invoke GetMessage, ADDR msg, NULL, 0, 0
+    test eax, eax
+    jz end_loop
+
+    invoke IsDialogMessage, hWnd, ADDR msg
+    test eax, eax
+    jnz msg_loop 
+
+    invoke TranslateMessage, ADDR msg
+    invoke DispatchMessage, ADDR msg
+    jmp msg_loop
 end_loop:
     MOV EAX, msg.wParam
     RET
@@ -128,7 +136,7 @@ CreateButton MACRO txt, id, x, y
     push ECX
 
     INVOKE CreateWindowEx, 0, ADDR ButtonClass, txt,
-           WS_CHILD or WS_VISIBLE or BS_PUSHBUTTON,
+           WS_CHILD or WS_VISIBLE or WS_TABSTOP or BS_PUSHBUTTON,
            x, y, 30, 30, hWin, id, hInstance, 0
 
     pop ECX
@@ -164,7 +172,7 @@ WndProc PROC hWin:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
         .ENDW
 
         INVOKE CreateWindowEx, 0, ADDR ButtonClass, ADDR Clear,
-           WS_CHILD or WS_VISIBLE or BS_PUSHBUTTON,
+           WS_CHILD or WS_VISIBLE or WS_TABSTOP or BS_PUSHBUTTON,
            50, 250, 180, 30, hWin, 16, hInstance, 0
 
     .ELSEIF uMsg == WM_COMMAND
