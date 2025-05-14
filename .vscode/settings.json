@@ -1,0 +1,8 @@
+{
+    "[assembly]": {
+        "editor.formatOnSave": false
+    },
+    "files.associations": {
+        "*.inc": "assembly"
+    }
+}
