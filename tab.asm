@@ -7,11 +7,13 @@ include C:\masm32\include\user32.inc
 include C:\masm32\include\kernel32.inc
 include C:\masm32\include\masm32.inc
 include c:\masm32\include\msvcrt.inc
+include C:\masm32\include\gdi32.inc
 
 includelib C:\masm32\lib\user32.lib
 includelib C:\masm32\lib\kernel32.lib
 includelib C:\masm32\lib\masm32.lib
 includelib c:\masm32\lib\msvcrt.lib
+includelib C:\masm32\lib\gdi32.lib
 
 .DATA
 AppName     DB "Function tabulation cos(exp(x)) - sin(x^2)",0
@@ -37,6 +39,11 @@ LabelH      DB "h:",0
 
 ErrMsg      DB "Invalid input",0
 
+minScreenX  REAL8 520.0
+maxScreenX  REAL8 950.0
+minScreenY  REAL8 20.0
+maxScreenY  REAL8 450.0
+
 .DATA?
 hInstance   HINSTANCE ?
 hMainWin    HWND ?
@@ -53,6 +60,10 @@ b           REAL8 ?
 h           REAL8 ?
 x           REAL8 ?
 fx          REAL8 ?
+
+xCoords         REAL8 512 DUP(?)
+yCoords         REAL8 512 DUP(?)
+pointsCount     DWORD ?
 
 .CODE
 
@@ -89,7 +100,7 @@ WinMain PROC
     invoke CreateWindowEx, 0, ADDR ClassName, ADDR AppName,
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT,
-        500, 500,
+        1000, 500,
         NULL, NULL, hInstance, NULL
 
     mov hMainWin, eax
@@ -123,6 +134,31 @@ WinMain ENDP
 include utils.inc
 
 MainWndProc PROC hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
+LOCAL px1, py1, px2, py2:DWORD
+LOCAL ps:PAINTSTRUCT
+LOCAL hdc:HDC
+LOCAL hPenOld:HGDIOBJ
+LOCAL hPenNew:HGDIOBJ
+
+.DATA
+    RangeFormat     DB "%lf %lf %lf %lf",13,10,0
+    MappingFormat   DB "%d %d",13,10,0
+
+.DATA?
+    I DWORD ?
+    TMP REAL8 ?
+
+    X REAL8 ?
+    Y REAL8 ?
+
+    maxX REAL8 ?
+    maxY REAL8 ?
+    minX REAL8 ?
+    minY REAL8 ?
+
+    maximum REAL8 2147483647.0
+
+.CODE 
     .IF uMsg == WM_CREATE
         invoke CreateWindowEx, WS_EX_CLIENTEDGE, ADDR EditClass, 0,
             WS_CHILD or WS_VISIBLE or WS_VSCROLL or ES_MULTILINE or ES_AUTOVSCROLL or ES_READONLY,
@@ -134,7 +170,110 @@ MainWndProc PROC hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
             WS_CHILD or WS_VISIBLE or WS_TABSTOP or BS_PUSHBUTTON,
             180, 400, 120, 30,
             hWnd, 2001, hInstance, 0
+    .ELSEIF uMsg == WM_PAINT
+        invoke BeginPaint, hWnd, ADDR ps
+        mov hdc, eax
 
+        invoke CreatePen, PS_SOLID, 2, 0FF0000h
+        mov hPenNew, eax
+        invoke SelectObject, hdc, hPenNew
+
+        lea esi, xCoords
+        lea edi, yCoords
+        mov I, 0
+        mov ebx, pointsCount
+
+        fld maximum
+        fst maxX
+        fst maxY
+        fchs
+        fst minX
+        fstp minY
+
+RANGE_LOOP_START:
+        fld qword ptr [esi]
+        fstp TMP
+
+        invoke max, TMP, maxX
+        fstp maxX
+
+        invoke min, TMP, minX
+        fstp minX
+
+        fld qword ptr [edi]
+        fstp TMP
+
+        invoke max, TMP, maxY
+        fstp maxY
+
+        invoke min, TMP, minY
+        fstp minY
+
+        add esi, SIZEOF REAL8
+        add edi, SIZEOF REAL8
+        inc I
+
+        cmp I, ebx
+        jl RANGE_LOOP_START
+
+        invoke crt_printf, addr RangeFormat, minX, maxX, minY, maxY
+
+        lea esi, xCoords
+        lea edi, yCoords
+        mov I, 0
+        mov ebx, pointsCount
+        dec ebx
+
+MAPPING_LOOP_START:
+        fld qword ptr [esi]
+        fstp TMP
+
+        invoke map, TMP, minX, maxX, minScreenX, maxScreenX
+        fstp TMP
+        invoke to_int, TMP
+        mov px1, eax
+
+        fld qword ptr [edi]
+        fstp TMP
+
+        invoke map, TMP, minY, maxY, maxScreenY, minScreenY
+        fstp TMP
+        invoke to_int, TMP
+        mov py1, eax
+
+        add esi, SIZEOF REAL8
+        add edi, SIZEOF REAL8
+
+        fld qword ptr [esi]
+        fstp TMP
+
+        invoke map, TMP, minX, maxX, minScreenX, maxScreenX
+        fstp TMP
+        invoke to_int, TMP
+        mov px2, eax
+
+        fld qword ptr [edi]
+        fstp TMP
+
+        invoke map, TMP, minY, maxY, maxScreenY, minScreenY
+        fstp TMP
+        invoke to_int, TMP
+        mov py2, eax
+
+        inc I
+        
+        invoke crt_printf, addr MappingFormat, px1, py1
+        invoke crt_printf, addr MappingFormat, px2, py2
+
+        invoke MoveToEx, hdc, px1, py1, NULL
+        invoke LineTo, hdc, px2, py2
+
+        cmp I, ebx
+        jl MAPPING_LOOP_START
+
+        invoke SelectObject, hdc, hPenOld
+        invoke DeleteObject, hPenNew
+        invoke EndPaint, hWnd, ADDR ps
     .ELSEIF uMsg == WM_COMMAND
         mov eax, wParam
         and eax, 0FFFFh
@@ -239,6 +378,10 @@ ChildWndProc PROC hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
             fdiv
             fadd
             fstp b ; b = b + h/2
+
+            lea esi, xCoords
+            lea edi, yCoords
+            mov pointsCount, 0
 tab_loop:
             ; f(x) = cos(exp(x)) - sin(x^2)
             invoke exp, x
@@ -251,6 +394,17 @@ tab_loop:
 
             fsub 
             fstp fx
+
+            fld x
+            fstp qword ptr [esi]
+
+            fld fx
+            fstp qword ptr [edi]
+
+            add esi, SIZEOF REAL8
+            add edi, SIZEOF REAL8
+
+            inc pointsCount
 
             invoke crt_sprintf, ADDR LineBuf, ADDR FormatOut, x, fx
             invoke lstrcat, ADDR OutputBuf, ADDR LineBuf
@@ -266,6 +420,7 @@ tab_loop:
 
             invoke SetWindowText, hEditOutput, ADDR OutputBuf
             invoke DestroyWindow, hWnd
+            invoke InvalidateRect, hMainWin, NULL, TRUE
 
             jmp tab_end
 error:

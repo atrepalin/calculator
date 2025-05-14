@@ -11,6 +11,73 @@ reset MACRO var
     mov dword ptr var+4, 0
 ENDM
 
+map PROC x_:REAL8, a_:REAL8, b_:REAL8, c_:REAL8, d_:REAL8 ; (x - a) * (d - c) / (b - a) + c
+    fld x_
+    fld a_
+    fsub    ; ST(0) = x - a
+
+    fld d_
+    fld c_
+    fsub    ; ST(1) = d - c
+
+    fld b_
+    fld a_
+    fsub    ; ST(2) = b - a
+
+    fdiv    ; ST(1) = (d - c) / (b - a)
+
+    fmul    ; ST(0) = (x - a) * (d - c) / (b - a)
+
+    fld c_
+    fadd    ; ST(0) = (x - a) * (d - c) / (b - a) + c
+    ret
+map ENDP
+
+min PROC a__:REAL8, b__:REAL8
+    fld b__
+    fld a__
+
+    fcompp
+    fstsw ax
+    sahf
+    jnc first
+
+    fld a__
+    ret
+
+first:
+    fld b__
+    ret
+min ENDP
+
+max PROC a__:REAL8, b__:REAL8
+    fld b__
+    fld a__
+
+    fcompp
+    fstsw ax
+    sahf
+    jnc first
+
+    fld b__
+    ret
+
+first:
+    fld a__
+    ret
+max ENDP
+
+to_int PROC var_:REAL8
+.DATA?
+    int_var  DWORD ?
+
+.CODE
+    fld var_
+    fistp int_var
+    mov eax, int_var
+    ret
+to_int ENDP
+
 floor PROC var:REAL8
 .DATA 
     ControlWord   EQU 0C00h
