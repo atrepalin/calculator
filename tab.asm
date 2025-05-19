@@ -143,10 +143,12 @@ LOCAL hPenNew:HGDIOBJ
 .DATA
     RangeFormat     DB "%lf %lf %lf %lf",13,10,0
     MappingFormat   DB "%d %d",13,10,0
+    ZERO            REAL8 0.0
 
 .DATA?
     I DWORD ?
     TMP REAL8 ?
+    CURRENT_POINT REAL8 ?
 
     X REAL8 ?
     Y REAL8 ?
@@ -174,10 +176,6 @@ LOCAL hPenNew:HGDIOBJ
         invoke BeginPaint, hWnd, ADDR ps
         mov hdc, eax
 
-        invoke CreatePen, PS_SOLID, 2, 0FF0000h
-        mov hPenNew, eax
-        invoke SelectObject, hdc, hPenNew
-
         lea esi, xCoords
         lea edi, yCoords
         mov I, 0
@@ -191,30 +189,30 @@ LOCAL hPenNew:HGDIOBJ
         fstp minY
 
 RANGE_LOOP_START:
-        fld qword ptr [esi]
-        fstp TMP
+            fld qword ptr [esi]
+            fstp TMP
 
-        invoke max, TMP, maxX
-        fstp maxX
+            invoke max, TMP, maxX
+            fstp maxX
 
-        invoke min, TMP, minX
-        fstp minX
+            invoke min, TMP, minX
+            fstp minX
 
-        fld qword ptr [edi]
-        fstp TMP
+            fld qword ptr [edi]
+            fstp TMP
 
-        invoke max, TMP, maxY
-        fstp maxY
+            invoke max, TMP, maxY
+            fstp maxY
 
-        invoke min, TMP, minY
-        fstp minY
+            invoke min, TMP, minY
+            fstp minY
 
-        add esi, SIZEOF REAL8
-        add edi, SIZEOF REAL8
-        inc I
+            add esi, SIZEOF REAL8
+            add edi, SIZEOF REAL8
+            inc I
 
-        cmp I, ebx
-        jl RANGE_LOOP_START
+            cmp I, ebx
+            jl RANGE_LOOP_START
 
         invoke crt_printf, addr RangeFormat, minX, maxX, minY, maxY
 
@@ -224,52 +222,136 @@ RANGE_LOOP_START:
         mov ebx, pointsCount
         dec ebx
 
-MAPPING_LOOP_START:
-        fld qword ptr [esi]
-        fstp TMP
+        invoke CreatePen, PS_DASH, 1, 0000000h
+        mov hPenNew, eax
+        invoke SelectObject, hdc, hPenNew
 
-        invoke map, TMP, minX, maxX, minScreenX, maxScreenX
+        invoke floor, minX
+        fstp CURRENT_POINT
+
+X_LOOP_START:
+            invoke map, CURRENT_POINT, minX, maxX, minScreenX, maxScreenX
+            fstp TMP
+            invoke to_int, TMP
+            mov px1, eax
+            mov px2, eax
+            mov py1, 20
+            mov py2, 450
+
+            invoke MoveToEx, hdc, px1, py1, NULL
+            invoke LineTo, hdc, px2, py2
+
+            fld CURRENT_POINT
+            fld1
+            fadd
+            fstp CURRENT_POINT
+
+            less CURRENT_POINT, maxX
+            jnc X_LOOP_START
+
+
+        invoke floor, minY
+        fstp CURRENT_POINT
+
+Y_LOOP_START:
+            invoke map, CURRENT_POINT, minY, maxY, maxScreenY, minScreenY
+            fstp TMP
+            invoke to_int, TMP
+            mov py1, eax
+            mov py2, eax
+            mov px1, 520
+            mov px2, 950
+
+            invoke MoveToEx, hdc, px1, py1, NULL
+            invoke LineTo, hdc, px2, py2
+
+            fld CURRENT_POINT
+            fld1
+            fadd
+            fstp CURRENT_POINT
+
+            less CURRENT_POINT, maxY
+            jnc Y_LOOP_START
+
+        invoke DeleteObject, hPenNew
+        invoke CreatePen, PS_SOLID, 2, 0000000h
+        mov hPenNew, eax
+        invoke SelectObject, hdc, hPenNew
+
+        invoke map, ZERO, minX, maxX, minScreenX, maxScreenX
         fstp TMP
         invoke to_int, TMP
         mov px1, eax
-
-        fld qword ptr [edi]
-        fstp TMP
-
-        invoke map, TMP, minY, maxY, maxScreenY, minScreenY
-        fstp TMP
-        invoke to_int, TMP
-        mov py1, eax
-
-        add esi, SIZEOF REAL8
-        add edi, SIZEOF REAL8
-
-        fld qword ptr [esi]
-        fstp TMP
-
-        invoke map, TMP, minX, maxX, minScreenX, maxScreenX
-        fstp TMP
-        invoke to_int, TMP
         mov px2, eax
-
-        fld qword ptr [edi]
-        fstp TMP
-
-        invoke map, TMP, minY, maxY, maxScreenY, minScreenY
-        fstp TMP
-        invoke to_int, TMP
-        mov py2, eax
-
-        inc I
-        
-        invoke crt_printf, addr MappingFormat, px1, py1
-        invoke crt_printf, addr MappingFormat, px2, py2
+        mov py1, 10
+        mov py2, 460
 
         invoke MoveToEx, hdc, px1, py1, NULL
         invoke LineTo, hdc, px2, py2
 
-        cmp I, ebx
-        jl MAPPING_LOOP_START
+        invoke map, ZERO, minY, maxY, maxScreenY, minScreenY
+        fstp TMP
+        invoke to_int, TMP
+        mov py1, eax
+        mov py2, eax
+        mov px1, 510
+        mov px2, 960
+
+        invoke MoveToEx, hdc, px1, py1, NULL
+        invoke LineTo, hdc, px2, py2
+
+
+        invoke DeleteObject, hPenNew
+        invoke CreatePen, PS_SOLID, 2, 0FF0000h
+        mov hPenNew, eax
+        invoke SelectObject, hdc, hPenNew
+
+MAPPING_LOOP_START:
+            fld qword ptr [esi]
+            fstp TMP
+
+            invoke map, TMP, minX, maxX, minScreenX, maxScreenX
+            fstp TMP
+            invoke to_int, TMP
+            mov px1, eax
+
+            fld qword ptr [edi]
+            fstp TMP
+
+            invoke map, TMP, minY, maxY, maxScreenY, minScreenY
+            fstp TMP
+            invoke to_int, TMP
+            mov py1, eax
+
+            add esi, SIZEOF REAL8
+            add edi, SIZEOF REAL8
+
+            fld qword ptr [esi]
+            fstp TMP
+
+            invoke map, TMP, minX, maxX, minScreenX, maxScreenX
+            fstp TMP
+            invoke to_int, TMP
+            mov px2, eax
+
+            fld qword ptr [edi]
+            fstp TMP
+
+            invoke map, TMP, minY, maxY, maxScreenY, minScreenY
+            fstp TMP
+            invoke to_int, TMP
+            mov py2, eax
+
+            inc I
+            
+            invoke crt_printf, addr MappingFormat, px1, py1
+            invoke crt_printf, addr MappingFormat, px2, py2
+
+            invoke MoveToEx, hdc, px1, py1, NULL
+            invoke LineTo, hdc, px2, py2
+
+            cmp I, ebx
+            jl MAPPING_LOOP_START
 
         invoke SelectObject, hdc, hPenOld
         invoke DeleteObject, hPenNew
